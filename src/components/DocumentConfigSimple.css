@@ -304,6 +304,40 @@
   background: #f3f4f6;
 }
 
+/* PARTE 2: Estilos para key y tipo */
+.header-key {
+  font-size: 10px;
+  color: #9ca3af;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 4px;
+  font-family: monospace;
+}
+
+.header-type-select {
+  font-size: 11px;
+  padding: 4px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: white;
+  color: #374151;
+  cursor: pointer;
+  margin-top: 4px;
+  width: 100%;
+  max-width: 120px;
+}
+
+.header-type-select:hover {
+  border-color: #3b82f6;
+}
+
+.header-type-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
 .inline-edit-input {
   width: 100%;
   padding: 6px 8px;
@@ -492,6 +526,94 @@
   text-align: center;
 }
 
+/* PASO 4: Estilos para indicador de sincronización pendiente */
+.pending-sync-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.sync-icon {
+  font-size: 16px;
+}
+
+.sync-text {
+  flex: 1;
+  font-size: 13px;
+  color: #92400e;
+  font-weight: 500;
+}
+
+.btn-retry-inline {
+  background: #f59e0b;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-retry-inline:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.btn-retry-inline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* PASO 3: Estilos para indicador de cambios sin aplicar */
+.unsaved-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.warning-icon {
+  font-size: 16px;
+}
+
+.warning-text {
+  flex: 1;
+  font-size: 13px;
+  color: #991b1b;
+  font-weight: 500;
+}
+
+.btn-reset-inline {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-reset-inline:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.btn-reset-inline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .document-config-simple {
@@ -541,4 +663,98 @@
     align-items: flex-start;
     gap: 8px;
   }
+}
+
+/* PASO 6: Estilos para barra de progreso */
+.progress-container {
+  margin: 16px 0;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.progress-step {
+  font-size: 13px;
+  font-weight: 600;
+  color: #3b82f6;
+  background: #eff6ff;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.progress-percentage {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #10b981 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-message {
+  font-size: 13px;
+  color: #6b7280;
+  text-align: center;
+  margin: 0;
+}
+
+/* PASO 7: Estilos para sección de restaurar backup */
+.restore-backup-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.btn-restore-backup {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.btn-restore-backup:hover:not(:disabled) {
+  background: #e5e7eb;
+  color: #374151;
+  border-color: #9ca3af;
+}
+
+.btn-restore-backup:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.restore-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #9ca3af;
 }
