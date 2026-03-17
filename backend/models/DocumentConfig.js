@@ -22,8 +22,7 @@ const documentConfigSchema = new mongoose.Schema({
     default: Date.now
   },
   updatedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: mongoose.Schema.Types.Mixed,
     required: false
   }
 }, {
