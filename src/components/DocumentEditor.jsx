@@ -17,6 +17,63 @@ import { savePDFBackup, hasPDFBackup } from '../services/pdfBackupService';
 // NUEVO: Importación para escáner de imágenes OCR
 import ImageScanner from './ImageScanner';
 
+// CORRECCIÓN: Funciones de migración para formato nuevo (keys únicos)
+const generateUniqueKey = (label, existingKeys) => {
+  let baseKey = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+  
+  if (!baseKey) baseKey = 'columna';
+  
+  let key = baseKey;
+  let counter = 1;
+  
+  while (existingKeys.includes(key)) {
+    key = `${baseKey}_${counter}`;
+    counter++;
+  }
+  
+  return key;
+};
+
+const detectFieldType = (label) => {
+  const lower = label.toLowerCase();
+  if (lower === 'fecha') return 'select-fecha';
+  if (lower === 'mes') return 'auto';
+  if (lower.includes('producto')) return 'select';
+  if (lower.includes('monto')) return 'monto';
+  if (lower === 'tasa') return 'percentage';
+  if (lower.includes('ganancia')) return 'monto';
+  return 'text';
+};
+
+const migrateHeaders = (oldHeaders) => {
+  if (!Array.isArray(oldHeaders) || oldHeaders.length === 0) {
+    return [];
+  }
+  
+  // Si ya está en nuevo formato
+  if (oldHeaders[0] && typeof oldHeaders[0] === 'object' && oldHeaders[0].key) {
+    return oldHeaders;
+  }
+  
+  // Migrar desde formato viejo (strings)
+  const existingKeys = [];
+  return oldHeaders.map((label, index) => {
+    const key = generateUniqueKey(label, existingKeys);
+    existingKeys.push(key);
+    
+    return {
+      key,
+      label,
+      type: detectFieldType(label),
+      order: index
+    };
+  });
+};
+
 export default function DocumentEditor({ month }) {
   const { user, isReadOnlyMode, getTrialStatus, isAdmin } = useAuth();
   
@@ -196,8 +253,15 @@ export default function DocumentEditor({ month }) {
     
     const merged = getMergedData(clientId, month);
     if (merged) {
-      // Usar los headers del documento o los default
-      const docHeaders = merged.headers.length > 0 ? merged.headers : defaultHeaders;
+      // CORRECCIÓN: Migrar headers si están en formato viejo (strings)
+      let docHeaders = merged.headers.length > 0 ? merged.headers : defaultHeaders;
+      
+      // Verificar si necesita migración (formato viejo: array de strings)
+      if (docHeaders.length > 0 && typeof docHeaders[0] === 'string') {
+        console.log('🔄 Migrando headers del documento al nuevo formato...');
+        docHeaders = migrateHeaders(docHeaders);
+      }
+      
       setHeaders(docHeaders);
       
       // Asegurar que haya al menos 50 filas de datos
@@ -224,8 +288,12 @@ export default function DocumentEditor({ month }) {
       tableData.forEach((row, rowIndex) => {
         row.forEach((cell, colIndex) => {
           let value = cell;
-          // La columna Mes (columna 1) se asigna automáticamente según el mes seleccionado
-          if (colIndex === 1) {
+          // CORRECCIÓN: Usar tipo de columna en lugar de índice hardcodeado
+          const column = docHeaders[colIndex];
+          const columnType = typeof column === 'object' ? column.type : 'text';
+          
+          // La columna con tipo 'auto' se asigna automáticamente (ej: Mes)
+          if (columnType === 'auto') {
             value = mesAutomatico;
           }
           // NO formatear automáticamente - mantener los valores tal cual están
@@ -288,17 +356,29 @@ export default function DocumentEditor({ month }) {
       [key]: value
     }));
 
-    // Si cambia la fecha (columna 0), actualizar mes automáticamente (columna 1)
-    if (colIndex === 0 && value) {
+    // CORRECCIÓN: Si cambia la fecha (tipo 'select-fecha'), actualizar mes automáticamente (tipo 'auto')
+    const currentColumn = headers[colIndex];
+    const currentType = typeof currentColumn === 'object' ? currentColumn.type : 'text';
+    
+    if (currentType === 'select-fecha' && value) {
       const fecha = new Date(value);
       if (!isNaN(fecha)) {
         const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
                       'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
         const mesNombre = meses[fecha.getMonth()] + ' 2026';
-        setEditedData(prev => ({
-          ...prev,
-          [`${rowIndex}-1`]: mesNombre
-        }));
+        
+        // Encontrar el índice de la columna con tipo 'auto' (Mes)
+        const mesColIndex = headers.findIndex(h => {
+          const type = typeof h === 'object' ? h.type : 'text';
+          return type === 'auto';
+        });
+        
+        if (mesColIndex !== -1) {
+          setEditedData(prev => ({
+            ...prev,
+            [`${rowIndex}-${mesColIndex}`]: mesNombre
+          }));
+        }
       }
     }
   };
