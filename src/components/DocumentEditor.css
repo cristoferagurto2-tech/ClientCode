@@ -414,6 +414,46 @@
   border-color: #3b82f6;
 }
 
+/* PARTE 3: Input con sufijo % */
+.input-with-suffix {
+  display: flex;
+  align-items: center;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.input-suffix {
+  background: #f1f5f9;
+  color: #64748b;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border-left: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.input-with-suffix .data-input {
+  border: none;
+  border-radius: 0;
+  padding: 6px 8px;
+  flex: 1;
+  min-width: 40px;
+}
+
+.input-with-suffix .data-input:focus {
+  box-shadow: none;
+  background: transparent;
+}
+
+.input-with-suffix:focus-within {
+  box-shadow: inset 0 0 0 2px #3b82f6;
+  border-color: #3b82f6;
+}
+
 /* Ajustar ancho para todas las columnas de datos - 11 columnas deben caber en pantalla */
 .data-table th:not(.row-num),
 .data-table td:not(.row-num) {

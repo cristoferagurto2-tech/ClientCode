@@ -1279,119 +1279,117 @@ export default function DocumentEditor({ month }) {
                         const key = `${rowIndex}-${colIndex}`;
                         const value = editedData[key] !== undefined ? editedData[key] : cell;
                         
-                        // Selector para Producto (columna 5)
-                        if (colIndex === 5) {
-                          const safeValue = value !== null && value !== undefined && value !== 'undefined' ? value : '';
-                          return (
-                            <td key={colIndex} data-label={headers[colIndex]}>
-                              <select
-                                value={safeValue}
-                                onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                                className="data-input"
-                                disabled={isReadOnly}
-                              >
-                                <option value="">Seleccione...</option>
-                                {productosList.map(prod => (
-                                  <option key={prod} value={prod}>{prod}</option>
-                                ))}
-                              </select>
-                            </td>
-                          );
-                        }
+                        // PARTE 3: Obtener información de la columna por tipo
+                        const column = headers[colIndex];
+                        const columnLabel = typeof column === 'object' ? column.label : column;
+                        const columnType = typeof column === 'object' ? column.type : 'text';
                         
-                        // Campo de día para Fecha (columna 0) - Solo días según el mes seleccionado
-                        if (colIndex === 0) {
-                          const diasOptions = getOpcionesDias();
-                          const mesNumero = (mesesList.indexOf(month.toLowerCase() + ' 2026') + 1).toString().padStart(2, '0');
-                          return (
-                            <td key={colIndex} data-label={headers[colIndex]}>
-                              <select
-                                value={value && value !== 'undefined' ? value : ''}
-                                onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                                className="data-input"
-                                disabled={isReadOnly}
-                              >
-                                <option value="">Día</option>
-                                {diasOptions.map(dia => (
-                                  <option key={dia} value={`2026-${mesNumero}-${dia}`}>
-                                    {dia}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                          );
-                        }
+                        const safeValue = value !== null && value !== undefined && value !== 'undefined' ? value : '';
                         
-                        // Campo automático para Mes (columna 1) - Se asigna automáticamente según el mes seleccionado
-                        if (colIndex === 1) {
-                          const mesAutomatico = month.toLowerCase() + ' 2026';
-                          return (
-                            <td key={colIndex} data-label={headers[colIndex]}>
-                              <input
-                                type="text"
-                                value={mesAutomatico}
-                                readOnly={true}
-                                className="data-input readonly"
-                                title="Mes asignado automáticamente"
-                              />
-                            </td>
-                          );
-                        }
-                        
-                        // Campo de Monto (columna 6) con prefijo S/
-                        if (colIndex === 6) {
-                          const safeValue = value !== null && value !== undefined && value !== 'undefined' ? value : '';
-                          return (
-                            <td key={colIndex} data-label={headers[colIndex]}>
-                              <div className="input-with-prefix">
-                                <span className="input-prefix">S/</span>
+                        // Renderizar según el tipo de campo
+                        switch (columnType) {
+                          case 'select':
+                            return (
+                              <td key={colIndex} data-label={columnLabel}>
+                                <select
+                                  value={safeValue}
+                                  onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                                  className="data-input"
+                                  disabled={isReadOnly}
+                                >
+                                  <option value="">Seleccione...</option>
+                                  {productosList.map(prod => (
+                                    <option key={prod} value={prod}>{prod}</option>
+                                  ))}
+                                </select>
+                              </td>
+                            );
+                          
+                          case 'select-fecha':
+                            const diasOptions = getOpcionesDias();
+                            const mesNumero = (mesesList.indexOf(month.toLowerCase() + ' 2026') + 1).toString().padStart(2, '0');
+                            return (
+                              <td key={colIndex} data-label={columnLabel}>
+                                <select
+                                  value={value && value !== 'undefined' ? value : ''}
+                                  onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                                  className="data-input"
+                                  disabled={isReadOnly}
+                                >
+                                  <option value="">Día</option>
+                                  {diasOptions.map(dia => (
+                                    <option key={dia} value={`2026-${mesNumero}-${dia}`}>
+                                      {dia}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                            );
+                          
+                          case 'auto':
+                            const mesAutomatico = month.toLowerCase() + ' 2026';
+                            return (
+                              <td key={colIndex} data-label={columnLabel}>
+                                <input
+                                  type="text"
+                                  value={mesAutomatico}
+                                  readOnly={true}
+                                  className="data-input readonly"
+                                  title="Mes asignado automáticamente"
+                                />
+                              </td>
+                            );
+                          
+                          case 'monto':
+                            return (
+                              <td key={colIndex} data-label={columnLabel}>
+                                <div className="input-with-prefix">
+                                  <span className="input-prefix">S/</span>
+                                  <input
+                                    type="text"
+                                    value={safeValue}
+                                    onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                                    onBlur={(e) => handleCellBlur(rowIndex, colIndex, e.target.value)}
+                                    className="data-input prefixed"
+                                    placeholder="0.00"
+                                    disabled={isReadOnly}
+                                  />
+                                </div>
+                              </td>
+                            );
+                          
+                          case 'percentage':
+                            return (
+                              <td key={colIndex} data-label={columnLabel}>
+                                <div className="input-with-suffix">
+                                  <input
+                                    type="text"
+                                    value={safeValue}
+                                    onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                                    onBlur={(e) => handleCellBlur(rowIndex, colIndex, e.target.value)}
+                                    className="data-input"
+                                    placeholder="0.00"
+                                    disabled={isReadOnly}
+                                  />
+                                  <span className="input-suffix">%</span>
+                                </div>
+                              </td>
+                            );
+                          
+                          default:
+                            return (
+                              <td key={colIndex} data-label={columnLabel}>
                                 <input
                                   type="text"
                                   value={safeValue}
                                   onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                                  onBlur={(e) => handleCellBlur(rowIndex, colIndex, e.target.value)}
-                                  className="data-input prefixed"
-                                  placeholder="0.00"
+                                  className="data-input"
+                                  placeholder=""
                                   disabled={isReadOnly}
                                 />
-                              </div>
-                            </td>
-                          );
+                              </td>
+                            );
                         }
-                        
-                        // Campo de Ganancias (columna 10) con prefijo S/
-                        if (colIndex === 10) {
-                          const safeValue = value !== null && value !== undefined && value !== 'undefined' ? value : '';
-                          return (
-                            <td key={colIndex} data-label={headers[colIndex]}>
-                              <div className="input-with-prefix">
-                                <span className="input-prefix">S/</span>
-                                <input
-                                  type="text"
-                                  value={safeValue}
-                                  onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                                  onBlur={(e) => handleCellBlur(rowIndex, colIndex, e.target.value)}
-                                  className="data-input prefixed"
-                                  placeholder="0.00"
-                                  disabled={isReadOnly}
-                                />
-                              </div>
-                            </td>
-                          );
-                        }
-                        
-                        return (
-                          <td key={colIndex} data-label={headers[colIndex]}>
-                            <input
-                              type="text"
-                              value={value !== null && value !== undefined && value !== 'undefined' ? value : ''}
-                              onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                              className="data-input"
-                              placeholder=""
-                              disabled={isReadOnly}
-                            />
-                          </td>
-                        );
                       })}
                     </tr>
                   );
