@@ -1339,7 +1339,7 @@ export default function DocumentEditor({ month }) {
                 <tr>
                   <th className="row-num">#</th>
                   {headers.map((header, index) => (
-                    <th key={index}>{header}</th>
+                    <th key={index}>{typeof header === 'object' ? header.label : header}</th>
                   ))}
                 </tr>
               </thead>
@@ -1565,7 +1565,7 @@ export default function DocumentEditor({ month }) {
                     <thead>
                       <tr>
                         {previewData.headers.map((header, idx) => (
-                          <th key={idx}>{header}</th>
+                          <th key={idx}>{typeof header === 'object' ? header.label : header}</th>
                         ))}
                       </tr>
                     </thead>
