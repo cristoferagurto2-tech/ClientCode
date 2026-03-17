@@ -1006,6 +1006,52 @@ router.put('/document-config', protect, adminOnly, async (req, res) => {
       });
     }
     
+    // Validar estructura de cada header
+    const validTypes = ['text', 'select', 'monto', 'auto', 'select-fecha', 'percentage'];
+    const keys = [];
+    
+    for (let i = 0; i < headers.length; i++) {
+      const h = headers[i];
+      
+      // Validar que tenga key y label
+      if (!h.key || !h.label) {
+        return res.status(400).json({
+          success: false,
+          error: `Header ${i} debe tener 'key' y 'label'`
+        });
+      }
+      
+      // Validar formato de key
+      if (!/^[a-z0-9_]+$/.test(h.key)) {
+        return res.status(400).json({
+          success: false,
+          error: `Header ${i}: key '${h.key}' solo puede contener letras minúsculas, números y guiones bajos`
+        });
+      }
+      
+      // Validar que no haya keys duplicados
+      if (keys.includes(h.key)) {
+        return res.status(400).json({
+          success: false,
+          error: `Header ${i}: key '${h.key}' está duplicado`
+        });
+      }
+      keys.push(h.key);
+      
+      // Validar tipo
+      if (h.type && !validTypes.includes(h.type)) {
+        return res.status(400).json({
+          success: false,
+          error: `Header ${i}: tipo '${h.type}' no es válido`
+        });
+      }
+      
+      // Asignar orden si no tiene
+      if (h.order === undefined) {
+        h.order = i;
+      }
+    }
+    
     let config = await DocumentConfig.findOne();
     if (!config) {
       config = new DocumentConfig({
@@ -1063,23 +1109,31 @@ router.post('/apply-document-config', protect, adminOnly, async (req, res) => {
         
         if (document) {
           // Documento existe - ACTUALIZAR PRESERVANDO DATOS
-          const oldHeaders = document.headers;
+          let oldHeaders = document.headers;
           const newHeaders = config.headers;
+          
+          // Migrar headers del documento si están en formato viejo (strings)
+          if (oldHeaders.length > 0 && typeof oldHeaders[0] === 'string') {
+            oldHeaders = DocumentConfig.migrateHeaders(oldHeaders);
+          }
           
           // Actualizar headers
           document.headers = newHeaders;
           
-          // Adaptar los datos existentes a los nuevos headers
+          // Adaptar los datos existentes a los nuevos headers usando KEYS
           if (document.data && document.data.length > 0) {
             document.data = document.data.map((row, rowIndex) => {
               // Crear nueva fila con los nuevos headers
               const newRow = new Array(newHeaders.length).fill('');
               
-              // Copiar datos de columnas que existen en ambos headers
+              // Copiar datos de columnas que tienen el mismo KEY
               oldHeaders.forEach((oldHeader, oldIndex) => {
-                const newIndex = newHeaders.indexOf(oldHeader);
-                if (newIndex !== -1 && row[oldIndex] !== undefined) {
-                  newRow[newIndex] = row[oldIndex];
+                if (row[oldIndex] !== undefined && row[oldIndex] !== '') {
+                  // Buscar en nuevos headers por KEY (no por nombre)
+                  const newIndex = newHeaders.findIndex(h => h.key === oldHeader.key);
+                  if (newIndex !== -1) {
+                    newRow[newIndex] = row[oldIndex];
+                  }
                 }
               });
               
@@ -1089,16 +1143,16 @@ router.post('/apply-document-config', protect, adminOnly, async (req, res) => {
           
           // Actualizar completedData si existe
           if (document.completedData && document.completedData.length > 0) {
-            // Las completedData usan índices, necesitamos mapearlos
             const newCompletedData = [];
             
             document.completedData.forEach(completed => {
-              // Encontrar el índice de la columna en los nuevos headers
               if (completed.colIndex < oldHeaders.length) {
-                const headerName = oldHeaders[completed.colIndex];
-                const newColIndex = newHeaders.indexOf(headerName);
+                const oldHeader = oldHeaders[completed.colIndex];
+                // Buscar por KEY en lugar de por nombre
+                const newHeader = newHeaders.find(h => h.key === oldHeader.key);
                 
-                if (newColIndex !== -1) {
+                if (newHeader) {
+                  const newColIndex = newHeaders.indexOf(newHeader);
                   newCompletedData.push({
                     rowIndex: completed.rowIndex,
                     colIndex: newColIndex
