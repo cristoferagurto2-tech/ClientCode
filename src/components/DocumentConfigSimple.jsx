@@ -847,7 +847,8 @@ ${columnList}
                             </svg>
                           </div>
 
-                          <div className="cell-content">
+                          {/* NUEVO DISEÑO: Header + Footer horizontal */}
+                          <div className="cell-header">
                             {editingIndex === index ? (
                               <input
                                 type="text"
@@ -856,35 +857,36 @@ ${columnList}
                                 onBlur={handleSaveEdit}
                                 onKeyDown={handleKeyDown}
                                 autoFocus
-                                className="inline-edit-input"
+                                className="header-edit-input"
                               />
                             ) : (
-                              <>
-                                <span 
-                                  className="header-text"
-                                  onDoubleClick={() => handleStartEdit(index)}
-                                  title="Doble-click para editar nombre"
-                                >
-                                  {header.label}
-                                </span>
-                                <span className="header-key" title="Identificador único (no editable)">
-                                  🔑 {header.key}
-                                </span>
-                                <select
-                                  className="header-type-select"
-                                  value={header.type}
-                                  onChange={(e) => handleTypeChange(index, e.target.value)}
-                                  title="Tipo de campo"
-                                >
-                                  <option value="text">📝 Texto</option>
-                                  <option value="select">📋 Selector</option>
-                                  <option value="monto">💰 Monto (S/)</option>
-                                  <option value="percentage">📊 %</option>
-                                  <option value="auto">⚙️ Auto</option>
-                                  <option value="select-fecha">📅 Fecha</option>
-                                </select>
-                              </>
+                              <span 
+                                className="header-name"
+                                onDoubleClick={() => handleStartEdit(index)}
+                                title="Doble-click para editar"
+                              >
+                                {header.label}
+                              </span>
                             )}
+                          </div>
+                          
+                          <div className="cell-footer">
+                            <span className="header-key" title={`Key: ${header.key}`}>
+                              🔑 {header.key}
+                            </span>
+                            <select
+                              className="header-type-compact"
+                              value={header.type}
+                              onChange={(e) => handleTypeChange(index, e.target.value)}
+                              title={`Tipo: ${getTypeLabel(header.type)}`}
+                            >
+                              <option value="text">📝 Txt</option>
+                              <option value="select">📋 Sel</option>
+                              <option value="monto">💰 Mto</option>
+                              <option value="percentage">📊 %</option>
+                              <option value="auto">⚙️ Aut</option>
+                              <option value="select-fecha">📅 Fch</option>
+                            </select>
                           </div>
 
                           <button 
