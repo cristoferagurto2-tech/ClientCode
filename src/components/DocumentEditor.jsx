@@ -59,7 +59,42 @@ const migrateHeaders = (oldHeaders) => {
     return oldHeaders;
   }
   
-  // Migrar desde formato viejo (strings)
+  // CORRECCIÓN: Detectar y corregir headers corruptos (strings JSON tipo {'0':'F','1':'e',...})
+  if (oldHeaders[0] && typeof oldHeaders[0] === 'string' && oldHeaders[0].startsWith("{'0':")) {
+    console.log('🔧 Corrigiendo headers corruptos (formato JSON string)...');
+    try {
+      // Extraer el label completo de cada string corrupto
+      const correctedLabels = oldHeaders.map(str => {
+        try {
+          // Intentar parsear como JSON reemplazando comillas simples por dobles
+          const jsonStr = str.replace(/'/g, '"');
+          const obj = JSON.parse(jsonStr);
+          // Reconstruir el string original concatenando valores
+          return Object.values(obj).join('');
+        } catch (e) {
+          // Si falla, devolver el string original
+          return str;
+        }
+      });
+      
+      // Ahora migrar desde los labels corregidos
+      const existingKeys = [];
+      return correctedLabels.map((label, index) => {
+        const key = generateUniqueKey(label, existingKeys);
+        existingKeys.push(key);
+        return {
+          key,
+          label,
+          type: detectFieldType(label),
+          order: index
+        };
+      });
+    } catch (e) {
+      console.error('Error corrigiendo headers corruptos:', e);
+    }
+  }
+  
+  // Migrar desde formato viejo (strings normales)
   const existingKeys = [];
   return oldHeaders.map((label, index) => {
     const key = generateUniqueKey(label, existingKeys);
