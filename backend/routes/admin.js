@@ -1117,8 +1117,8 @@ router.post('/apply-document-config', protect, adminOnly, async (req, res) => {
             oldHeaders = DocumentConfig.migrateHeaders(oldHeaders);
           }
           
-          // Actualizar headers
-          document.headers = newHeaders;
+          // Actualizar headers - CONVERTIR OBJETOS A STRINGS (labels)
+          document.headers = newHeaders.map(h => typeof h === 'object' ? h.label : h);
           
           // Adaptar los datos existentes a los nuevos headers usando KEYS
           if (document.data && document.data.length > 0) {
@@ -1181,7 +1181,7 @@ router.post('/apply-document-config', protect, adminOnly, async (req, res) => {
             clientId: client._id,
             month,
             year: targetYear,
-            headers: config.headers,
+            headers: config.headers.map(h => h.label),  // CONVERTIR OBJETOS A STRINGS
             data: emptyData,
             completedData: [],
             originalFile: null,
