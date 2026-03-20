@@ -17,97 +17,14 @@ import { savePDFBackup, hasPDFBackup } from '../services/pdfBackupService';
 // NUEVO: Importación para escáner de imágenes OCR
 import ImageScanner from './ImageScanner';
 
-// CORRECCIÓN: Funciones de migración para formato nuevo (keys únicos)
-const generateUniqueKey = (label, existingKeys) => {
-  let baseKey = label
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
-  
-  if (!baseKey) baseKey = 'columna';
-  
-  let key = baseKey;
-  let counter = 1;
-  
-  while (existingKeys.includes(key)) {
-    key = `${baseKey}_${counter}`;
-    counter++;
-  }
-  
-  return key;
-};
-
-const detectFieldType = (label) => {
-  const lower = label.toLowerCase();
-  if (lower === 'fecha') return 'select-fecha';
-  if (lower === 'mes') return 'auto';
-  if (lower.includes('producto')) return 'select';
-  if (lower.includes('monto')) return 'monto';
-  if (lower === 'tasa') return 'percentage';
-  if (lower.includes('ganancia')) return 'monto';
-  return 'text';
-};
-
-const migrateHeaders = (oldHeaders) => {
-  if (!Array.isArray(oldHeaders) || oldHeaders.length === 0) {
-    return [];
-  }
-  
-  // Si ya está en nuevo formato
-  if (oldHeaders[0] && typeof oldHeaders[0] === 'object' && oldHeaders[0].key) {
-    return oldHeaders;
-  }
-  
-  // CORRECCIÓN: Detectar y corregir headers corruptos (strings JSON tipo {'0':'F','1':'e',...})
-  if (oldHeaders[0] && typeof oldHeaders[0] === 'string' && oldHeaders[0].startsWith("{'0':")) {
-    console.log('🔧 Corrigiendo headers corruptos (formato JSON string)...');
-    try {
-      // Extraer el label completo de cada string corrupto
-      const correctedLabels = oldHeaders.map(str => {
-        try {
-          // Intentar parsear como JSON reemplazando comillas simples por dobles
-          const jsonStr = str.replace(/'/g, '"');
-          const obj = JSON.parse(jsonStr);
-          // Reconstruir el string original concatenando valores
-          return Object.values(obj).join('');
-        } catch (e) {
-          // Si falla, devolver el string original
-          return str;
-        }
-      });
-      
-      // Ahora migrar desde los labels corregidos
-      const existingKeys = [];
-      return correctedLabels.map((label, index) => {
-        const key = generateUniqueKey(label, existingKeys);
-        existingKeys.push(key);
-        return {
-          key,
-          label,
-          type: detectFieldType(label),
-          order: index
-        };
-      });
-    } catch (e) {
-      console.error('Error corrigiendo headers corruptos:', e);
-    }
-  }
-  
-  // Migrar desde formato viejo (strings normales)
-  const existingKeys = [];
-  return oldHeaders.map((label, index) => {
-    const key = generateUniqueKey(label, existingKeys);
-    existingKeys.push(key);
-    
-    return {
-      key,
-      label,
-      type: detectFieldType(label),
-      order: index
-    };
-  });
-};
+// CORRECCIÓN: Importar utilidades de headers
+import { 
+  fixCorruptedHeader, 
+  normalizeHeaders, 
+  renderHeaderLabel,
+  generateUniqueKey,
+  detectFieldType 
+} from '../utils/headerUtils';
 
 export default function DocumentEditor({ month }) {
   const { user, isReadOnlyMode, getTrialStatus, isAdmin } = useAuth();
@@ -288,13 +205,13 @@ export default function DocumentEditor({ month }) {
     
     const merged = getMergedData(clientId, month);
     if (merged) {
-      // CORRECCIÓN: Migrar headers si están en formato viejo (strings)
+      // CORRECCIÓN: Usar normalizeHeaders del helper para migrar headers si están en formato viejo
       let docHeaders = merged.headers.length > 0 ? merged.headers : defaultHeaders;
       
-      // Verificar si necesita migración (formato viejo: array de strings)
+      // Verificar si necesita normalización (formato viejo: array de strings)
       if (docHeaders.length > 0 && typeof docHeaders[0] === 'string') {
-        console.log('🔄 Migrando headers del documento al nuevo formato...');
-        docHeaders = migrateHeaders(docHeaders);
+        console.log('🔄 Normalizando headers del documento con helper...');
+        docHeaders = normalizeHeaders(docHeaders);
       }
       
       setHeaders(docHeaders);
@@ -1374,7 +1291,7 @@ export default function DocumentEditor({ month }) {
                 <tr>
                   <th className="row-num">#</th>
                   {headers.map((header, index) => (
-                    <th key={index}>{typeof header === 'object' ? header.label : header}</th>
+                    <th key={index}>{renderHeaderLabel(header, index)}</th>
                   ))}
                 </tr>
               </thead>
@@ -1600,7 +1517,7 @@ export default function DocumentEditor({ month }) {
                     <thead>
                       <tr>
                         {previewData.headers.map((header, idx) => (
-                          <th key={idx}>{typeof header === 'object' ? header.label : header}</th>
+                          <th key={idx}>{renderHeaderLabel(header, idx)}</th>
                         ))}
                       </tr>
                     </thead>
