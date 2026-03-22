@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const XLSX = require('xlsx');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Document = require('../models/Document');
 const Client = require('../models/Client');
@@ -1268,6 +1269,150 @@ router.delete('/cleanup-corrupt-documents', async (req, res) => {
       error: 'Error al eliminar documentos corruptos',
       details: error.message
     });
+  }
+});
+
+// ENDPOINT: Migrar headers corruptos a formato limpio (strings)
+// Reconstruye los nombres de columnas desde objetos {0:'F', 1:'e', ...} a "Fecha"
+router.post('/migrate-headers', async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const Document = require('../models/Document');
+    const DocumentConfig = require('../models/DocumentConfig');
+    
+    // PASO 1: Obtener headers oficiales para fallback
+    const config = await DocumentConfig.getConfig();
+    const officialHeaders = config.headers.map(h => h.label);
+    
+    // PASO 2: Buscar todos los documentos
+    const allDocuments = await Document.find({}).session(session);
+    
+    const migrationResults = [];
+    let migratedCount = 0;
+    let errorCount = 0;
+    
+    for (const doc of allDocuments) {
+      try {
+        if (!doc.headers || !Array.isArray(doc.headers)) {
+          continue;
+        }
+        
+        let needsMigration = false;
+        const newHeaders = [];
+        
+        // PASO 3: Procesar cada header
+        for (let i = 0; i < doc.headers.length; i++) {
+          const header = doc.headers[i];
+          
+          // Si ya es string y no parece corrupto, mantenerlo
+          if (typeof header === 'string' && !header.match(/\{\s*['"]\d+['"]\s*:/)) {
+            newHeaders.push(header);
+            continue;
+          }
+          
+          // Si es objeto, intentar reconstruir
+          if (typeof header === 'object' && header !== null) {
+            needsMigration = true;
+            
+            // Extraer claves numéricas
+            const keys = Object.keys(header);
+            const numericKeys = keys.filter(k => {
+              const num = parseInt(k);
+              return !isNaN(num) && String(num) === k;
+            });
+            
+            if (numericKeys.length > 0) {
+              // Ordenar y reconstruir
+              const sortedKeys = numericKeys.sort((a, b) => parseInt(a) - parseInt(b));
+              const reconstructed = sortedKeys.map(k => header[k]).join('');
+              
+              if (reconstructed && reconstructed.trim().length > 0) {
+                newHeaders.push(reconstructed);
+              } else {
+                // Fallback: usar header oficial o "Columna"
+                newHeaders.push(officialHeaders[i] || `Columna ${i + 1}`);
+              }
+            } else {
+              // No tiene claves numéricas, usar fallback
+              newHeaders.push(officialHeaders[i] || `Columna ${i + 1}`);
+            }
+          } else {
+            // Cualquier otro caso, mantener como está
+            newHeaders.push(String(header || `Columna ${i + 1}`));
+          }
+        }
+        
+        // PASO 4: Solo actualizar si hubo cambios
+        if (needsMigration) {
+          // Verificar que la cantidad de headers no cambió
+          if (newHeaders.length !== doc.headers.length) {
+            console.warn(`⚠️  Documento ${doc._id}: cantidad de headers cambió (${doc.headers.length} -> ${newHeaders.length})`);
+          }
+          
+          // Actualizar el documento
+          await Document.findByIdAndUpdate(
+            doc._id,
+            { headers: newHeaders },
+            { session }
+          );
+          
+          migratedCount++;
+          migrationResults.push({
+            documentId: doc._id.toString(),
+            clientId: doc.clientId?.toString(),
+            month: doc.month,
+            year: doc.year,
+            oldHeaders: doc.headers.map(h => typeof h === 'object' ? 'OBJECT_CORRUPT' : h),
+            newHeaders: newHeaders,
+            status: 'migrated'
+          });
+        }
+        
+      } catch (docError) {
+        errorCount++;
+        migrationResults.push({
+          documentId: doc._id.toString(),
+          clientId: doc.clientId?.toString(),
+          month: doc.month,
+          year: doc.year,
+          error: docError.message,
+          status: 'error'
+        });
+        console.error(`❌ Error migrando documento ${doc._id}:`, docError.message);
+      }
+    }
+    
+    // PASO 5: Commit de la transacción
+    await session.commitTransaction();
+    
+    res.json({
+      success: true,
+      message: `Migración completada: ${migratedCount} documentos migrados, ${errorCount} errores`,
+      totalDocumentsChecked: allDocuments.length,
+      migratedCount: migratedCount,
+      errorCount: errorCount,
+      details: migrationResults.slice(0, 10), // Primeros 10 resultados
+      officialHeaders: officialHeaders,
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log(`✅ Migración completada: ${migratedCount} documentos migrados`);
+    
+  } catch (error) {
+    // Rollback en caso de error
+    await session.abortTransaction();
+    console.error('❌ Error en migración:', error);
+    
+    res.status(500).json({
+      success: false,
+      error: 'Error durante la migración',
+      details: error.message,
+      timestamp: new Date().toISOString()
+    });
+  } finally {
+    session.endSession();
   }
 });
 
