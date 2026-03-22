@@ -18,6 +18,25 @@ export const fixCorruptedHeader = (header) => {
     return header.label;
   }
   
+  // Si es objeto con claves numéricas (formato corrupto de MongoDB: {0: 'F', 1: 'e', ...})
+  if (typeof header === 'object' && header !== null) {
+    const keys = Object.keys(header);
+    // Verificar si todas las claves son numéricas
+    const numericKeys = keys.filter(k => !isNaN(parseInt(k)) && k === String(parseInt(k)));
+    
+    if (numericKeys.length > 0) {
+      // Ordenar claves numéricamente y unir valores
+      const sortedKeys = numericKeys.sort((a, b) => parseInt(a) - parseInt(b));
+      const reconstructed = sortedKeys.map(k => header[k]).join('');
+      if (reconstructed && reconstructed.length > 0) {
+        return reconstructed;
+      }
+    }
+    
+    // Si es otro tipo de objeto, intentar convertir a string
+    return String(header) || 'Columna';
+  }
+  
   // Si es string, intentar corregir
   if (typeof header === 'string') {
     // Método 1: Detectar patrón {'0':'F', '1':'e', ...} o {"0":"F", ...}

@@ -1213,4 +1213,62 @@ router.post('/apply-document-config', protect, adminOnly, async (req, res) => {
   }
 });
 
+// ENDPOINT: Eliminar documentos con headers corruptos
+router.delete('/cleanup-corrupt-documents', async (req, res) => {
+  try {
+    const Document = require('../models/Document');
+    
+    // Buscar todos los documentos
+    const allDocuments = await Document.find({});
+    const corruptDocuments = [];
+    
+    for (const doc of allDocuments) {
+      let hasCorruptHeaders = false;
+      
+      // Verificar si tiene headers corruptos
+      if (doc.headers && Array.isArray(doc.headers)) {
+        for (const header of doc.headers) {
+          // Verificar si es objeto con claves numéricas (formato corrupto)
+          if (typeof header === 'object' && header !== null) {
+            const keys = Object.keys(header);
+            const numericKeys = keys.filter(k => !isNaN(parseInt(k)) && k === String(parseInt(k)));
+            if (numericKeys.length > 0) {
+              hasCorruptHeaders = true;
+              break;
+            }
+          }
+        }
+      }
+      
+      if (hasCorruptHeaders) {
+        corruptDocuments.push(doc._id);
+      }
+    }
+    
+    // Borrar documentos corruptos
+    let deletedCount = 0;
+    if (corruptDocuments.length > 0) {
+      const result = await Document.deleteMany({ _id: { $in: corruptDocuments } });
+      deletedCount = result.deletedCount;
+    }
+    
+    res.json({
+      success: true,
+      message: `Se eliminaron ${deletedCount} documentos corruptos`,
+      totalDocumentsChecked: allDocuments.length,
+      corruptDocumentsFound: corruptDocuments.length,
+      deletedCount: deletedCount,
+      corruptIds: corruptDocuments
+    });
+    
+  } catch (error) {
+    console.error('Error limpiando documentos corruptos:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al eliminar documentos corruptos',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;
