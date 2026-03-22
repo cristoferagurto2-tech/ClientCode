@@ -1306,13 +1306,19 @@ router.post('/migrate-headers', async (req, res) => {
         for (let i = 0; i < doc.headers.length; i++) {
           const header = doc.headers[i];
           
-          // Si ya es string y no parece corrupto, mantenerlo
-          if (typeof header === 'string' && !header.match(/\{\s*['"]\d+['"]\s*:/)) {
+          // Si ya es string limpio (no parece objeto JSON corrupto), mantenerlo
+          // Los corruptos empiezan con "{" y tienen \u0027 (comillas escapadas) o claves numéricas
+          const isCorruptString = typeof header === 'string' && (
+            header.trim().startsWith('{') && 
+            (header.includes('\\u0027') || header.match(/['"]\d+['"]\s*:/))
+          );
+          
+          if (typeof header === 'string' && !isCorruptString) {
             newHeaders.push(header);
             continue;
           }
           
-          // Si es objeto, intentar reconstruir
+          // Si es objeto o string corrupto, intentar reconstruir
           if (typeof header === 'object' && header !== null) {
             needsMigration = true;
             
@@ -1336,6 +1342,45 @@ router.post('/migrate-headers', async (req, res) => {
               }
             } else {
               // No tiene claves numéricas, usar fallback
+              newHeaders.push(officialHeaders[i] || `Columna ${i + 1}`);
+            }
+          } else if (isCorruptString) {
+            // String con formato JSON corrupto (ej: "{\n  \u00270\u0027: \u0027F\u0027...")
+            needsMigration = true;
+            
+            try {
+              // Reemplazar \u0027 por comillas simples reales
+              let jsonStr = header.replace(/\\u0027/g, "'");
+              // También reemplazar comillas dobles escapadas si las hay
+              jsonStr = jsonStr.replace(/\\"/g, '"');
+              
+              const obj = JSON.parse(jsonStr);
+              
+              // Extraer claves numéricas
+              const keys = Object.keys(obj);
+              const numericKeys = keys.filter(k => {
+                const num = parseInt(k);
+                return !isNaN(num) && String(num) === k;
+              });
+              
+              if (numericKeys.length > 0) {
+                // Ordenar y reconstruir
+                const sortedKeys = numericKeys.sort((a, b) => parseInt(a) - parseInt(b));
+                const reconstructed = sortedKeys.map(k => obj[k]).join('');
+                
+                if (reconstructed && reconstructed.trim().length > 0) {
+                  newHeaders.push(reconstructed);
+                } else {
+                  // Fallback: usar header oficial
+                  newHeaders.push(officialHeaders[i] || `Columna ${i + 1}`);
+                }
+              } else {
+                // No tiene claves numéricas, usar fallback
+                newHeaders.push(officialHeaders[i] || `Columna ${i + 1}`);
+              }
+            } catch (parseError) {
+              console.warn(`⚠️  No se pudo parsear header como JSON en documento ${doc._id}:`, header.substring(0, 50));
+              // Fallback: usar header oficial
               newHeaders.push(officialHeaders[i] || `Columna ${i + 1}`);
             }
           } else {
