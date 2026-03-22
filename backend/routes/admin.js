@@ -1416,4 +1416,49 @@ router.post('/migrate-headers', async (req, res) => {
   }
 });
 
+// ENDPOINT DE DIAGNÓSTICO: Ver estructura real de headers corruptos
+router.get('/diagnose-headers', async (req, res) => {
+  try {
+    const Document = require('../models/Document');
+    const documents = await Document.find({}).limit(5);
+    
+    const diagnosis = [];
+    
+    for (const doc of documents) {
+      const docInfo = {
+        documentId: doc._id.toString(),
+        clientId: doc.clientId?.toString(),
+        month: doc.month,
+        year: doc.year,
+        hasHeaders: !!doc.headers,
+        headersCount: doc.headers?.length || 0,
+        headersTypes: doc.headers?.map((h, i) => ({
+          index: i,
+          type: typeof h,
+          isNull: h === null,
+          isArray: Array.isArray(h),
+          keys: typeof h === 'object' && h !== null ? Object.keys(h) : null,
+          sample: typeof h === 'object' && h !== null ? 
+            JSON.stringify(h).substring(0, 100) : String(h).substring(0, 50)
+        })) || []
+      };
+      
+      diagnosis.push(docInfo);
+    }
+    
+    res.json({
+      success: true,
+      totalDocuments: documents.length,
+      diagnosis: diagnosis
+    });
+    
+  } catch (error) {
+    console.error('Error en diagnóstico:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
