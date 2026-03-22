@@ -1506,4 +1506,128 @@ router.get('/diagnose-headers', async (req, res) => {
   }
 });
 
+// ENDPOINT: Corregir headers "Columna X" usando headers oficiales de DocumentConfig
+router.post('/fix-headers-from-config', async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const Document = require('../models/Document');
+    const DocumentConfig = require('../models/DocumentConfig');
+    
+    // PASO 1: Obtener headers oficiales
+    const config = await DocumentConfig.getConfig();
+    const officialHeaders = config.headers.map(h => h.label);
+    
+    console.log('📋 Headers oficiales:', officialHeaders);
+    
+    // PASO 2: Buscar documentos con headers "Columna X"
+    const allDocuments = await Document.find({}).session(session);
+    const documentsToFix = [];
+    
+    for (const doc of allDocuments) {
+      if (!doc.headers || !Array.isArray(doc.headers)) continue;
+      
+      // Verificar si tiene al menos un header "Columna X"
+      const hasColumnaX = doc.headers.some(h => 
+        typeof h === 'string' && h.match(/^Columna\s+\d+$/)
+      );
+      
+      if (hasColumnaX) {
+        documentsToFix.push(doc);
+      }
+    }
+    
+    console.log(`🔍 Encontrados ${documentsToFix.length} documentos para corregir`);
+    
+    // PASO 3: Corregir cada documento
+    const results = [];
+    let fixedCount = 0;
+    let errorCount = 0;
+    
+    for (const doc of documentsToFix) {
+      try {
+        // Crear nuevos headers basados en los oficiales
+        // Mantenemos la misma cantidad de columnas
+        const newHeaders = [];
+        
+        for (let i = 0; i < doc.headers.length; i++) {
+          if (i < officialHeaders.length) {
+            // Usar header oficial
+            newHeaders.push(officialHeaders[i]);
+          } else {
+            // Si hay más columnas que headers oficiales, mantener el original
+            // o usar "Columna X" si es el único que tenía
+            const original = doc.headers[i];
+            if (typeof original === 'string' && !original.match(/^Columna\s+\d+$/)) {
+              newHeaders.push(original);
+            } else {
+              newHeaders.push(`Columna ${i + 1}`);
+            }
+          }
+        }
+        
+        // Actualizar documento
+        await Document.findByIdAndUpdate(
+          doc._id,
+          { headers: newHeaders },
+          { session }
+        );
+        
+        fixedCount++;
+        results.push({
+          documentId: doc._id.toString(),
+          clientId: doc.clientId?.toString(),
+          month: doc.month,
+          year: doc.year,
+          oldHeaders: doc.headers,
+          newHeaders: newHeaders,
+          status: 'fixed'
+        });
+        
+        console.log(`✅ Documento ${doc._id} corregido`);
+        
+      } catch (docError) {
+        errorCount++;
+        results.push({
+          documentId: doc._id.toString(),
+          error: docError.message,
+          status: 'error'
+        });
+        console.error(`❌ Error en documento ${doc._id}:`, docError.message);
+      }
+    }
+    
+    // PASO 4: Commit de la transacción
+    await session.commitTransaction();
+    
+    res.json({
+      success: true,
+      message: `Corrección completada: ${fixedCount} documentos arreglados, ${errorCount} errores`,
+      totalDocumentsChecked: allDocuments.length,
+      documentsWithColumnaX: documentsToFix.length,
+      fixedCount: fixedCount,
+      errorCount: errorCount,
+      officialHeaders: officialHeaders,
+      sampleResults: results.slice(0, 5),
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log(`🎉 Corrección completada: ${fixedCount} documentos arreglados`);
+    
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('❌ Error en corrección:', error);
+    
+    res.status(500).json({
+      success: false,
+      error: 'Error durante la corrección',
+      details: error.message,
+      timestamp: new Date().toISOString()
+    });
+  } finally {
+    session.endSession();
+  }
+});
+
 module.exports = router;
