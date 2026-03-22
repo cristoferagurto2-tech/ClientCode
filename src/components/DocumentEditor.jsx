@@ -242,7 +242,7 @@ export default function DocumentEditor({ month }) {
           let value = cell;
           // CORRECCIÓN: Usar tipo de columna en lugar de índice hardcodeado
           const column = docHeaders[colIndex];
-          const columnType = typeof column === 'object' ? column.type : 'text';
+          const columnType = (typeof column === 'object' && column !== null) ? column.type : 'text';
           
           // La columna con tipo 'auto' se asigna automáticamente (ej: Mes)
           if (columnType === 'auto') {
@@ -310,7 +310,7 @@ export default function DocumentEditor({ month }) {
 
     // CORRECCIÓN: Si cambia la fecha (tipo 'select-fecha'), actualizar mes automáticamente (tipo 'auto')
     const currentColumn = headers[colIndex];
-    const currentType = typeof currentColumn === 'object' ? currentColumn.type : 'text';
+    const currentType = (typeof currentColumn === 'object' && currentColumn !== null) ? currentColumn.type : 'text';
     
     if (currentType === 'select-fecha' && value) {
       const fecha = new Date(value);
@@ -1313,8 +1313,8 @@ export default function DocumentEditor({ month }) {
                         
                         // PARTE 3: Obtener información de la columna por tipo
                         const column = headers[colIndex];
-                        const columnLabel = typeof column === 'object' ? column.label : column;
-                        const columnType = typeof column === 'object' ? column.type : 'text';
+                        const columnLabel = (typeof column === 'object' && column !== null) ? column.label : column;
+                        const columnType = (typeof column === 'object' && column !== null) ? column.type : 'text';
                         
                         const safeValue = value !== null && value !== undefined && value !== 'undefined' ? value : '';
                         
