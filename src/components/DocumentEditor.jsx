@@ -208,8 +208,9 @@ export default function DocumentEditor({ month }) {
       // CORRECCIÓN: Usar normalizeHeaders del helper para migrar headers si están en formato viejo
       let docHeaders = merged.headers.length > 0 ? merged.headers : defaultHeaders;
       
-      // Verificar si necesita normalización (formato viejo: array de strings)
-      if (docHeaders.length > 0 && typeof docHeaders[0] === 'string') {
+      // NORMALIZACIÓN FORZADA: Siempre normalizar para asegurar que tengan la propiedad 'type'
+      // Esto convierte strings a objetos {key, label, type, order} necesarios para los selectores
+      if (docHeaders.length > 0) {
         console.log('🔄 Normalizando headers del documento con helper...');
         docHeaders = normalizeHeaders(docHeaders);
       }
