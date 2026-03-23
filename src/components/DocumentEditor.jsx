@@ -212,7 +212,9 @@ export default function DocumentEditor({ month }) {
       // Esto convierte strings a objetos {key, label, type, order} necesarios para los selectores
       if (docHeaders.length > 0) {
         console.log('🔄 Normalizando headers del documento con helper...');
+        console.log('📥 Headers ANTES de normalizar:', JSON.stringify(docHeaders));
         docHeaders = normalizeHeaders(docHeaders);
+        console.log('📤 Headers DESPUÉS de normalizar:', JSON.stringify(docHeaders));
       }
       
       setHeaders(docHeaders);
@@ -1287,6 +1289,7 @@ export default function DocumentEditor({ month }) {
           )}
 
           <div className="table-wrapper">
+            {console.log('🎨 Renderizando headers:', JSON.stringify(headers))}
             <table className="data-table">
               <thead>
                 <tr>
