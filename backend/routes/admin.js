@@ -1630,4 +1630,114 @@ router.post('/fix-headers-from-config', async (req, res) => {
   }
 });
 
+// ENDPOINT: Migrar headers NULL a headers oficiales
+router.post('/fix-null-headers', async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const Document = require('../models/Document');
+    const DocumentConfig = require('../models/DocumentConfig');
+    
+    // PASO 1: Obtener headers oficiales
+    const config = await DocumentConfig.getConfig();
+    const officialHeaders = config.headers.map(h => h.label);
+    
+    console.log('📋 Headers oficiales:', officialHeaders);
+    
+    // PASO 2: Buscar documentos con headers NULL
+    const allDocuments = await Document.find({}).session(session);
+    const documentsToFix = [];
+    
+    for (const doc of allDocuments) {
+      if (!doc.headers || !Array.isArray(doc.headers)) continue;
+      
+      // Verificar si TODOS los headers son NULL
+      const allNull = doc.headers.every(h => h === null || h === undefined);
+      
+      if (allNull) {
+        documentsToFix.push(doc);
+      }
+    }
+    
+    console.log(`🔍 Encontrados ${documentsToFix.length} documentos con headers NULL`);
+    
+    // PASO 3: Corregir cada documento
+    const results = [];
+    let fixedCount = 0;
+    let errorCount = 0;
+    
+    for (const doc of documentsToFix) {
+      try {
+        // Usar headers oficiales
+        const newHeaders = officialHeaders.slice(0, doc.headers.length);
+        
+        // Si hay más columnas que headers oficiales, rellenar con nombres genéricos
+        while (newHeaders.length < doc.headers.length) {
+          newHeaders.push(`Columna ${newHeaders.length + 1}`);
+        }
+        
+        // Actualizar documento
+        await Document.findByIdAndUpdate(
+          doc._id,
+          { headers: newHeaders },
+          { session }
+        );
+        
+        fixedCount++;
+        results.push({
+          documentId: doc._id.toString(),
+          clientId: doc.clientId?.toString(),
+          month: doc.month,
+          year: doc.year,
+          oldHeaders: doc.headers,
+          newHeaders: newHeaders,
+          status: 'fixed'
+        });
+        
+        console.log(`✅ Documento ${doc._id} corregido con headers oficiales`);
+        
+      } catch (docError) {
+        errorCount++;
+        results.push({
+          documentId: doc._id.toString(),
+          error: docError.message,
+          status: 'error'
+        });
+        console.error(`❌ Error en documento ${doc._id}:`, docError.message);
+      }
+    }
+    
+    // PASO 4: Commit de la transacción
+    await session.commitTransaction();
+    
+    res.json({
+      success: true,
+      message: `Migración completada: ${fixedCount} documentos arreglados, ${errorCount} errores`,
+      totalDocumentsChecked: allDocuments.length,
+      documentsWithNullHeaders: documentsToFix.length,
+      fixedCount: fixedCount,
+      errorCount: errorCount,
+      officialHeaders: officialHeaders,
+      sampleResults: results.slice(0, 5),
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log(`🎉 Migración completada: ${fixedCount} documentos arreglados`);
+    
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('❌ Error en migración:', error);
+    
+    res.status(500).json({
+      success: false,
+      error: 'Error durante la migración',
+      details: error.message,
+      timestamp: new Date().toISOString()
+    });
+  } finally {
+    session.endSession();
+  }
+});
+
 module.exports = router;
