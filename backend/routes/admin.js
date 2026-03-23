@@ -1639,23 +1639,46 @@ router.post('/fix-null-headers', async (req, res) => {
     const Document = require('../models/Document');
     const DocumentConfig = require('../models/DocumentConfig');
     
-    // PASO 1: Obtener headers oficiales
-    const config = await DocumentConfig.getConfig();
-    const officialHeaders = config.headers.map(h => h.label);
+    // PASO 1: Obtener headers oficiales con fallback
+    let officialHeaders = [];
+    try {
+      const config = await DocumentConfig.getConfig();
+      console.log('📋 Config obtenida:', JSON.stringify(config, null, 2));
+      
+      if (config && config.headers && Array.isArray(config.headers)) {
+        officialHeaders = config.headers.map(h => h.label || h.toString()).filter(h => h);
+        console.log('📋 Headers oficiales extraídos:', officialHeaders);
+      }
+    } catch (configError) {
+      console.error('⚠️ Error obteniendo DocumentConfig:', configError.message);
+    }
     
-    console.log('📋 Headers oficiales:', officialHeaders);
+    // Fallback: usar headers por defecto si no se pudieron obtener
+    if (officialHeaders.length === 0) {
+      console.log('⚠️ Usando headers por defecto');
+      officialHeaders = [
+        'Fecha', 'Mes', 'DNI', 'Nombre y Apellidos', 'Celular',
+        'Producto', 'Monto', 'Tasa', 'Lugar', 'Observación', 'Ganancias'
+      ];
+    }
     
     // PASO 2: Buscar documentos con headers NULL
     const allDocuments = await Document.find({}).session(session);
+    console.log(`🔍 Total documentos en BD: ${allDocuments.length}`);
+    
     const documentsToFix = [];
     
     for (const doc of allDocuments) {
-      if (!doc.headers || !Array.isArray(doc.headers)) continue;
+      if (!doc.headers || !Array.isArray(doc.headers)) {
+        console.log(`⚠️ Documento ${doc._id} sin headers o no es array`);
+        continue;
+      }
       
       // Verificar si TODOS los headers son NULL
       const allNull = doc.headers.every(h => h === null || h === undefined);
       
       if (allNull) {
+        console.log(`🔍 Documento ${doc._id} tiene headers NULL (${doc.headers.length} columnas)`);
         documentsToFix.push(doc);
       }
     }
@@ -1669,20 +1692,26 @@ router.post('/fix-null-headers', async (req, res) => {
     
     for (const doc of documentsToFix) {
       try {
-        // Usar headers oficiales
-        const newHeaders = officialHeaders.slice(0, doc.headers.length);
-        
-        // Si hay más columnas que headers oficiales, rellenar con nombres genéricos
-        while (newHeaders.length < doc.headers.length) {
-          newHeaders.push(`Columna ${newHeaders.length + 1}`);
+        // Usar headers oficiales (asegurar que tenemos suficientes)
+        const newHeaders = [];
+        for (let i = 0; i < doc.headers.length; i++) {
+          if (i < officialHeaders.length) {
+            newHeaders.push(officialHeaders[i]);
+          } else {
+            newHeaders.push(`Columna ${i + 1}`);
+          }
         }
         
-        // Actualizar documento
-        await Document.findByIdAndUpdate(
-          doc._id,
-          { headers: newHeaders },
+        console.log(`📝 Documento ${doc._id} - nuevos headers:`, newHeaders);
+        
+        // Actualizar documento usando updateOne para asegurar el cambio
+        const updateResult = await Document.updateOne(
+          { _id: doc._id },
+          { $set: { headers: newHeaders } },
           { session }
         );
+        
+        console.log(`📝 Update result para ${doc._id}:`, updateResult);
         
         fixedCount++;
         results.push({
@@ -1690,12 +1719,12 @@ router.post('/fix-null-headers', async (req, res) => {
           clientId: doc.clientId?.toString(),
           month: doc.month,
           year: doc.year,
-          oldHeaders: doc.headers,
+          headersCount: doc.headers.length,
           newHeaders: newHeaders,
           status: 'fixed'
         });
         
-        console.log(`✅ Documento ${doc._id} corregido con headers oficiales`);
+        console.log(`✅ Documento ${doc._id} corregido`);
         
       } catch (docError) {
         errorCount++;
@@ -1710,6 +1739,7 @@ router.post('/fix-null-headers', async (req, res) => {
     
     // PASO 4: Commit de la transacción
     await session.commitTransaction();
+    console.log('✅ Transacción committeada');
     
     res.json({
       success: true,
@@ -1733,6 +1763,7 @@ router.post('/fix-null-headers', async (req, res) => {
       success: false,
       error: 'Error durante la migración',
       details: error.message,
+      stack: error.stack,
       timestamp: new Date().toISOString()
     });
   } finally {
