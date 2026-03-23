@@ -39,7 +39,7 @@ export default function DocumentEditor({ month }) {
     // Permitir durante el período de prueba
     return trialStatus?.isTrialActive || false;
   };
-  const { getMergedData, updateCompletedData, downloadOriginalFile } = useDocuments();
+  const { getMergedData, updateCompletedData, downloadOriginalFile, isDataCorrupted, isSyncing } = useDocuments();
   const [data, setData] = useState(null);
   const [headers, setHeaders] = useState([]);
   const [editedData, setEditedData] = useState({});
@@ -212,9 +212,7 @@ export default function DocumentEditor({ month }) {
       // Esto convierte strings a objetos {key, label, type, order} necesarios para los selectores
       if (docHeaders.length > 0) {
         console.log('🔄 Normalizando headers del documento con helper...');
-        console.log('📥 Headers ANTES de normalizar:', JSON.stringify(docHeaders));
         docHeaders = normalizeHeaders(docHeaders);
-        console.log('📤 Headers DESPUÉS de normalizar:', JSON.stringify(docHeaders));
       }
       
       setHeaders(docHeaders);
@@ -1186,6 +1184,49 @@ export default function DocumentEditor({ month }) {
 
   return (
     <div className="document-editor-v2">
+      {/* Mostrar mensaje de carga si los datos están corruptos o sincronizando */}
+      {(isDataCorrupted || isSyncing) && (
+        <div className="sync-loading-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div className="spinner" style={{
+            width: '50px',
+            height: '50px',
+            border: '5px solid #f3f3f3',
+            borderTop: '5px solid #3498db',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            marginBottom: '20px'
+          }}></div>
+          <h3 style={{ color: '#333', marginBottom: '10px' }}>
+            {isDataCorrupted ? '🧹 Limpiando datos corruptos...' : '⏳ Sincronizando datos...'}
+          </h3>
+          <p style={{ color: '#666', textAlign: 'center' }}>
+            {isDataCorrupted 
+              ? 'Detectamos datos corruptos en tu navegador. Estamos recuperando la información desde el servidor.' 
+              : 'Estamos cargando tu información desde el servidor. Por favor espera...'}
+          </p>
+        </div>
+      )}
+      
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+
       {/* Banner de modo solo lectura - solo mostrar si authChecked es true */}
       {authChecked && isReadOnly && (
         <div className="read-only-banner">
@@ -1289,7 +1330,6 @@ export default function DocumentEditor({ month }) {
           )}
 
           <div className="table-wrapper">
-            {console.log('🎨 Renderizando headers:', JSON.stringify(headers))}
             <table className="data-table">
               <thead>
                 <tr>

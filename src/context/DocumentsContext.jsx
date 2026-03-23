@@ -39,9 +39,38 @@ export function DocumentsProvider({ children }) {
   const [backendAvailable, setBackendAvailable] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState(null);
-  
+  const [isDataCorrupted, setIsDataCorrupted] = useState(false);
+   
   // Obtener funciones de AuthContext para sincronización de IDs
   const { getClientBackendId, syncClientBackendId, clients } = useAuth();
+
+  // Función para detectar si los datos están corruptos
+  const checkIfDataIsCorrupted = (docs) => {
+    if (!docs || typeof docs !== 'object') return false;
+    
+    for (const clientId in docs) {
+      const clientDocs = docs[clientId];
+      if (!clientDocs || typeof clientDocs !== 'object') continue;
+      
+      for (const month in clientDocs) {
+        const doc = clientDocs[month];
+        if (!doc || !doc.headers || !Array.isArray(doc.headers)) continue;
+        
+        // Verificar si todos los headers son null o "Columna"
+        const hasNullHeaders = doc.headers.every(h => h === null || h === undefined);
+        const hasColumnaHeaders = doc.headers.every(h => 
+          (typeof h === 'string' && h.startsWith('Columna')) ||
+          (typeof h === 'object' && h !== null && h.label === 'Columna')
+        );
+        
+        if (hasNullHeaders || hasColumnaHeaders) {
+          console.warn(`⚠️ Datos corruptos detectados para cliente ${clientId}, mes ${month}`);
+          return true;
+        }
+      }
+    }
+    return false;
+  };
 
   useEffect(() => {
     const initializeDocuments = async () => {
@@ -54,9 +83,25 @@ export function DocumentsProvider({ children }) {
       const savedData = localStorage.getItem('completedData');
       
       if (savedDocs) {
-        setClientDocuments(JSON.parse(savedDocs));
+        const parsedDocs = JSON.parse(savedDocs);
+        
+        // Verificar si los datos están corruptos
+        if (checkIfDataIsCorrupted(parsedDocs)) {
+          console.warn('🧹 Datos corruptos detectados en localStorage. Limpiando...');
+          setIsDataCorrupted(true);
+          
+          // Limpiar localStorage
+          localStorage.removeItem('clientDocuments');
+          localStorage.removeItem('completedData');
+          
+          // No cargar datos corruptos
+          setClientDocuments({});
+          setCompletedData({});
+        } else {
+          setClientDocuments(parsedDocs);
+        }
       }
-      if (savedData) {
+      if (savedData && !isDataCorrupted) {
         setCompletedData(JSON.parse(savedData));
       }
     };
@@ -75,9 +120,15 @@ export function DocumentsProvider({ children }) {
         setIsSyncing(true);
         try {
           await syncFromBackend(user.id);
-          console.log('Sincronización automática completada');
+          console.log('✅ Sincronización automática completada');
+          
+          // Si había datos corruptos, limpiar el flag después de sincronizar exitosamente
+          if (isDataCorrupted) {
+            console.log('🧹 Limpiando flag de datos corruptos');
+            setIsDataCorrupted(false);
+          }
         } catch (error) {
-          console.error('Error en sincronización automática:', error);
+          console.error('❌ Error en sincronización automática:', error);
         } finally {
           setIsSyncing(false);
         }
@@ -85,7 +136,7 @@ export function DocumentsProvider({ children }) {
     };
     
     autoSyncOnLogin();
-  }, [backendAvailable]);
+  }, [backendAvailable, isDataCorrupted]);
 
   useEffect(() => {
     localStorage.setItem('clientDocuments', JSON.stringify(clientDocuments));
@@ -574,6 +625,7 @@ export function DocumentsProvider({ children }) {
       backendAvailable,
       isSyncing,
       syncError,
+      isDataCorrupted,
       uploadDocument,
       uploadDocumentToAllMonths,
       downloadOriginalFile,
