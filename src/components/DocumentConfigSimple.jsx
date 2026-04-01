@@ -75,7 +75,14 @@ export default function DocumentConfigSimple() {
 
   // PARTE 2: Funciones de migración y utilidades para nuevo formato
   const generateUniqueKey = (label, existingKeys) => {
-    let baseKey = label
+    // Validación: asegurar que label sea string
+    let safeLabel = label;
+    if (!label || typeof label !== 'string') {
+      console.warn('⚠️ Label inválido detectado, usando fallback:', label);
+      safeLabel = 'columna';
+    }
+    
+    let baseKey = safeLabel
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '_')
       .replace(/_+/g, '_')
@@ -95,6 +102,12 @@ export default function DocumentConfigSimple() {
   };
 
   const detectFieldType = (label) => {
+    // Validación: asegurar que label sea string
+    if (!label || typeof label !== 'string') {
+      console.warn('⚠️ Label inválido en detectFieldType, usando tipo text:', label);
+      return 'text';
+    }
+    
     const lower = label.toLowerCase();
     if (lower === 'fecha') return 'select-fecha';
     if (lower === 'mes') return 'auto';
@@ -107,17 +120,33 @@ export default function DocumentConfigSimple() {
 
   const migrateHeaders = (oldHeaders) => {
     if (!Array.isArray(oldHeaders) || oldHeaders.length === 0) {
+      console.log('ℹ️ Headers vacíos o inválidos, usando valores por defecto');
       return getDefaultHeaders();
     }
     
     // Si ya está en nuevo formato
     if (oldHeaders[0] && typeof oldHeaders[0] === 'object' && oldHeaders[0].key) {
+      console.log('✅ Headers ya están en nuevo formato');
       return oldHeaders;
     }
     
-    // Migrar desde formato viejo (strings)
+    // Migrar desde formato viejo (strings) con validación
+    console.log('🔄 Migrando headers desde formato viejo...');
     const existingKeys = [];
-    return oldHeaders.map((label, index) => {
+    return oldHeaders.map((item, index) => {
+      // Validar que el item sea válido
+      let label;
+      if (typeof item === 'string' && item.trim() !== '') {
+        label = item.trim();
+      } else if (item && typeof item === 'object' && item.label && typeof item.label === 'string') {
+        // Es un objeto con label
+        label = item.label.trim();
+      } else {
+        // Fallback: usar nombre genérico
+        console.warn(`⚠️ Header ${index} inválido, usando fallback:`, item);
+        label = `Columna ${index + 1}`;
+      }
+      
       const key = generateUniqueKey(label, existingKeys);
       existingKeys.push(key);
       
@@ -462,7 +491,13 @@ export default function DocumentConfigSimple() {
         return;
       }
       
-      const validHeaders = headers.filter(h => h && typeof h === 'string' && h.trim() !== '');
+      // Validar que todos los headers tengan la estructura correcta
+      const validHeaders = headers.filter(h => {
+        if (!h || typeof h !== 'object') return false;
+        if (!h.key || !h.label) return false;
+        if (typeof h.key !== 'string' || typeof h.label !== 'string') return false;
+        return h.label.trim() !== '';
+      });
       
       if (validHeaders.length === 0) {
         setMessage('❌ Error: Debe haber al menos una columna válida');
@@ -470,9 +505,16 @@ export default function DocumentConfigSimple() {
         return;
       }
       
+      // Si hay headers inválidos, normalizarlos
+      let headersToSave = validHeaders;
+      if (validHeaders.length !== headers.length) {
+        console.warn(`⚠️ Se filtraron ${headers.length - validHeaders.length} headers inválidos`);
+        headersToSave = migrateHeaders(headers);
+      }
+      
       // PASO 1: Guardar en localStorage primero (respaldo local)
       const configBackup = {
-        headers: validHeaders,
+        headers: headersToSave,
         timestamp: new Date().toISOString(),
         synced: false
       };
@@ -483,7 +525,7 @@ export default function DocumentConfigSimple() {
       // PASO 4: Intentar guardar en backend con reintentos
       try {
         const result = await retryOperation(
-          () => adminAPI.updateDocumentConfig(validHeaders),
+          () => adminAPI.updateDocumentConfig(headersToSave),
           3 // máximo 3 intentos
         );
         
@@ -494,8 +536,8 @@ export default function DocumentConfigSimple() {
           setPendingSync(false);
           setErrorCount(0);
           
-          setOriginalHeaders(validHeaders);
-          setHeaders(validHeaders);
+          setOriginalHeaders(headersToSave);
+          setHeaders(headersToSave);
           setMessage('✅ Configuración guardada y sincronizada correctamente');
           setTimeout(() => setMessage(''), 3000);
         }
@@ -579,7 +621,7 @@ Esta acción reemplazará los documentos actuales de todos los clientes.
     }
 
     // PASO 5: Segunda confirmación con checklist
-    const columnList = headers.map((h, i) => `${i + 1}. ${h}`).join('\n');
+    const columnList = headers.map((h, i) => `${i + 1}. ${h.label || h}`).join('\n');
     
     const secondConfirmMessage = `✅ CONFIRMACIÓN FINAL
 

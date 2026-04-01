@@ -185,10 +185,25 @@ export default function DocumentEditor({ month }) {
     return opciones;
   };
 
-  // Función para obtener la clase de color según la observación (solo para columna 9)
-  const getObservacionColorClass = (row) => {
-    if (!row || row.length < 10) return '';
-    const observacion = String(row[9] || '').toLowerCase().trim();
+  // Función auxiliar para encontrar el índice de la columna "Observación"
+  const getObservacionIndex = (headersArray) => {
+    if (!headersArray || !Array.isArray(headersArray)) return -1;
+    
+    return headersArray.findIndex(h => {
+      const headerName = typeof h === 'object' && h !== null ? h.label : h;
+      return headerName && headerName.toLowerCase().includes('observaci');
+    });
+  };
+
+  // Función para obtener la clase de color según la observación
+  const getObservacionColorClass = (row, observacionIndex = -1) => {
+    if (!row || row.length === 0) return '';
+    
+    // Si no se proporciona el índice, buscarlo en headers
+    const idx = observacionIndex !== -1 ? observacionIndex : getObservacionIndex(headers);
+    if (idx === -1 || idx >= row.length) return '';
+    
+    const observacion = String(row[idx] || '').toLowerCase().trim();
     
     if (observacion.includes('cobro')) {
       return 'observacion-cobro';
@@ -476,6 +491,9 @@ export default function DocumentEditor({ month }) {
           return [255, 255, 255]; // Blanco
         };
 
+        // Encontrar índice de la columna Observación
+        const observacionColIndex = getObservacionIndex(headers);
+
         doc.autoTable({
           head: [headers],
           body: tableData,
@@ -494,8 +512,8 @@ export default function DocumentEditor({ month }) {
             fontStyle: 'bold'
           },
           didParseCell: function(data) {
-            // Aplicar color SOLO a la columna de observaciones (índice 9)
-            if (data.cell.section === 'body' && data.column.index === 9) {
+            // Aplicar color SOLO a la columna de observaciones
+            if (data.cell.section === 'body' && observacionColIndex !== -1 && data.column.index === observacionColIndex) {
               const observacion = data.cell.raw;
               const color = getObservacionColor(observacion);
               if (color && color[0] !== 255) { // Solo si no es blanco
@@ -731,8 +749,14 @@ export default function DocumentEditor({ month }) {
   };
 
   // Función para obtener el color según la observación
-  const getRowColor = (row) => {
-    const observacion = String(row[9] || '').toLowerCase().trim();
+  const getRowColor = (row, observacionIndex = -1) => {
+    if (!row || row.length === 0) return 'transparent';
+    
+    // Si no se proporciona el índice, buscarlo en headers
+    const idx = observacionIndex !== -1 ? observacionIndex : getObservacionIndex(headers);
+    if (idx === -1 || idx >= row.length) return 'transparent';
+    
+    const observacion = String(row[idx] || '').toLowerCase().trim();
     
     if (observacion.includes('cobro')) {
       return '#fef3c7'; // Amarillo
@@ -881,6 +905,9 @@ export default function DocumentEditor({ month }) {
       const tableData = [];
       const rowStyles = [];
       
+      // Encontrar índice de la columna Observación
+      const observacionColIndex = getObservacionIndex(headers);
+      
       data.forEach((row, rowIndex) => {
         const rowData = row.map((cell, colIndex) => {
           const key = `${rowIndex}-${colIndex}`;
@@ -892,8 +919,8 @@ export default function DocumentEditor({ month }) {
         if (rowData.some(cell => cell !== '')) {
           tableData.push(rowData);
           
-          // Calcular color según observación (columna 9)
-          const observacion = String(rowData[9] || '').toLowerCase().trim();
+          // Calcular color según observación
+          const observacion = observacionColIndex !== -1 ? String(rowData[observacionColIndex] || '').toLowerCase().trim() : '';
           let fillColor = null;
           
           if (observacion.includes('cobro')) {
@@ -942,7 +969,7 @@ export default function DocumentEditor({ month }) {
         },
         // Hook para aplicar colores solo a la columna de observaciones cuando el botón está activado
         didParseCell: function(data) {
-          if (showColorsInPreview && data.column.index === 9 && data.cell.section === 'body') {
+          if (showColorsInPreview && observacionColIndex !== -1 && data.column.index === observacionColIndex && data.cell.section === 'body') {
             const rowIndex = data.row.index;
             const color = rowStyles[rowIndex];
             if (color) {
@@ -1346,7 +1373,9 @@ export default function DocumentEditor({ month }) {
                     const key = `${rowIndex}-${colIndex}`;
                     return editedData[key] !== undefined ? editedData[key] : cell;
                   });
-                  const rowColor = getRowColor(currentRow);
+                  // Encontrar índice de Observación para pasárselo a getRowColor
+                  const observacionIndex = getObservacionIndex(headers);
+                  const rowColor = getRowColor(currentRow, observacionIndex);
                   
                   return (
                     <tr key={rowIndex} style={{ backgroundColor: rowColor }}>
@@ -1567,18 +1596,26 @@ export default function DocumentEditor({ month }) {
                     </thead>
                     <tbody>
                       {previewData.rows.length > 0 ? (
-                        previewData.rows.map((row, rowIdx) => (
-                          <tr key={rowIdx}>
-                            {row.map((cell, cellIdx) => (
-                              <td 
-                                key={cellIdx}
-                                className={showColorsInPreview && cellIdx === 9 ? getObservacionColorClass(row) : ''}
-                              >
-                                {cell}
-                              </td>
-                            ))}
-                          </tr>
-                        ))
+                        // Encontrar índice de la columna Observación dinámicamente
+                        (() => {
+                          const observacionIndex = previewData.headers.findIndex(h => {
+                            const headerName = typeof h === 'object' ? h.label : h;
+                            return headerName && headerName.toLowerCase().includes('observaci');
+                          });
+                          
+                          return previewData.rows.map((row, rowIdx) => (
+                            <tr key={rowIdx}>
+                              {row.map((cell, cellIdx) => (
+                                <td 
+                                  key={cellIdx}
+                                  className={showColorsInPreview && cellIdx === observacionIndex ? getObservacionColorClass(row) : ''}
+                                >
+                                  {cell}
+                                </td>
+                              ))}
+                            </tr>
+                          ));
+                        })()
                       ) : (
                         <tr>
                           <td colSpan={previewData.headers.length} className="no-data">
