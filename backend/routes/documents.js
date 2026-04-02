@@ -12,12 +12,8 @@ const defaultHeaders = [
 
 // Productos disponibles
 const productosList = [
-  'Préstamo personal',
-  'Crédito de consumo',
-  'Tarjeta de crédito',
-  'Préstamo vehicular (automotriz)',
-  'Crédito hipotecario',
-  'Microcrédito'
+  'Tarjeta de Crédito (TC)',
+  '(ET)'
 ];
 
 // @route   GET /api/documents/:month

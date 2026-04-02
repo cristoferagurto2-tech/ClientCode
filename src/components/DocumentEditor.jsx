@@ -100,12 +100,8 @@ export default function DocumentEditor({ month }) {
   ];
 
   const productosList = [
-    'Préstamo personal',
-    'Crédito de consumo',
-    'Tarjeta de crédito',
-    'Préstamo vehicular (automotriz)',
-    'Crédito hipotecario',
-    'Microcrédito'
+    'Tarjeta de Crédito (TC)',
+    '(ET)'
   ];
 
   const mesesList = [
