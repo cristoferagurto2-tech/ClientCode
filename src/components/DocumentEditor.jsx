@@ -773,74 +773,87 @@ export default function DocumentEditor({ month }) {
 
   // Calcular análisis tipo Dashboard
   const dashboard = useMemo(() => {
+    // Encontrar índices de columnas dinámicamente
+    const dniIndex = headers.findIndex(h => h.label === 'DNI' || h.key === 'dni');
+    const productoIndex = headers.findIndex(h => h.type === 'select' || h.label?.toLowerCase().includes('producto'));
+    const montoIndex = headers.findIndex(h => h.type === 'monto' && !h.label?.toLowerCase().includes('ganancia'));
+    const tasaIndex = headers.findIndex(h => h.type === 'percentage' || h.label === 'Tasa');
+    const gananciasIndex = headers.findIndex(h => h.label?.toLowerCase().includes('ganancia'));
+    const mesIndex = headers.findIndex(h => h.type === 'auto' || h.label === 'Mes');
+    const fechaIndex = headers.findIndex(h => h.type === 'select-fecha' || h.label === 'Fecha');
+    
     // Obtener datos actuales con ediciones
     const currentData = data ? data.map((row, rowIndex) => {
       return row.map((cell, colIndex) => {
         const key = `${rowIndex}-${colIndex}`;
         return editedData[key] !== undefined ? editedData[key] : cell;
       });
-    }).filter(row => row[2] && row[2] !== '') : []; // Filtrar filas con DNI (columna 2)
+    }) : [];
+    
+    // Filtrar filas con DNI
+    const filteredData = dniIndex !== -1 ? currentData.filter(row => row[dniIndex] && row[dniIndex] !== '') : currentData;
 
-    if (currentData.length === 0) {
+    if (filteredData.length === 0) {
       return {
         totalClientes: 0,
         montoTotal: 0,
         promedioTasa: 0,
         totalGanancias: 0,
         porMeses: mesesList.map(m => ({ mes: m, clientes: 0, monto: 0, ganancias: 0 })),
-        porProductos: productosList.map(p => ({ producto: p, total: 0 }))
+        porProductos: productosList.map(p => ({ producto: p, total: 0 })),
+        _debug: { dniIndex, productoIndex, montoIndex, tasaIndex, gananciasIndex, mesIndex, fechaIndex }
       };
     }
 
     // Resumen General
-    const totalClientes = currentData.length;
-    const montoTotal = currentData.reduce((sum, row) => {
-      const monto = parseMonto(row[6]);
+    const totalClientes = filteredData.length;
+    const montoTotal = montoIndex !== -1 ? filteredData.reduce((sum, row) => {
+      const monto = parseMonto(row[montoIndex]);
       return sum + monto;
-    }, 0);
+    }, 0) : 0;
     
     // Calcular promedio ponderado de tasas (ponderado por el monto)
-    const tasasConMontos = currentData.map(row => {
-      const tasa = parseMonto(row[7]);
-      const monto = parseMonto(row[6]);
+    const tasasConMontos = (tasaIndex !== -1 && montoIndex !== -1) ? filteredData.map(row => {
+      const tasa = parseMonto(row[tasaIndex]);
+      const monto = parseMonto(row[montoIndex]);
       return { tasa, monto };
-    }).filter(item => item.tasa > 0 && item.monto > 0);
+    }).filter(item => item.tasa > 0 && item.monto > 0) : [];
     
     const totalMonto = tasasConMontos.reduce((sum, item) => sum + item.monto, 0);
     const sumaPonderada = tasasConMontos.reduce((sum, item) => sum + (item.tasa * item.monto), 0);
     const promedioTasa = totalMonto > 0 ? (sumaPonderada / totalMonto) : 0;
     
-    const totalGanancias = currentData.reduce((sum, row) => {
-      const ganancia = parseMonto(row[10]);
+    const totalGanancias = gananciasIndex !== -1 ? filteredData.reduce((sum, row) => {
+      const ganancia = parseMonto(row[gananciasIndex]);
       return sum + ganancia;
-    }, 0);
+    }, 0) : 0;
 
     // Resumen por Meses
     const porMeses = mesesList.map(mes => {
-      const filasMes = currentData.filter(row => {
-        const mesRow = String(row[1]).toLowerCase().trim();
+      const filasMes = mesIndex !== -1 ? filteredData.filter(row => {
+        const mesRow = String(row[mesIndex]).toLowerCase().trim();
         return mesRow === mes;
-      });
+      }) : filteredData;
       
       return {
         mes: mes.charAt(0).toUpperCase() + mes.slice(1),
         clientes: filasMes.length,
-        monto: filasMes.reduce((sum, row) => {
-          const monto = parseMonto(row[6]);
+        monto: montoIndex !== -1 ? filasMes.reduce((sum, row) => {
+          const monto = parseMonto(row[montoIndex]);
           return sum + monto;
-        }, 0),
-        ganancias: filasMes.reduce((sum, row) => {
-          const ganancia = parseMonto(row[10]);
+        }, 0) : 0,
+        ganancias: gananciasIndex !== -1 ? filasMes.reduce((sum, row) => {
+          const ganancia = parseMonto(row[gananciasIndex]);
           return sum + ganancia;
-        }, 0)
+        }, 0) : 0
       };
     });
 
     // Productos y Conteo
     const porProductos = productosList.map(prod => {
-      const count = currentData.filter(row => 
-        String(row[5]).toLowerCase().trim() === prod.toLowerCase()
-      ).length;
+      const count = productoIndex !== -1 ? filteredData.filter(row => 
+        String(row[productoIndex]).toLowerCase().trim() === prod.toLowerCase()
+      ).length : 0;
       return {
         producto: prod,
         total: count
@@ -853,9 +866,10 @@ export default function DocumentEditor({ month }) {
       promedioTasa,
       totalGanancias,
       porMeses,
-      porProductos
+      porProductos,
+      _debug: { dniIndex, productoIndex, montoIndex, tasaIndex, gananciasIndex, mesIndex, fechaIndex }
     };
-  }, [data, editedData]);
+  }, [data, editedData, headers]);
 
   // Generar y descargar PDF con los datos y análisis
   const handleDownload = () => {
@@ -1011,7 +1025,12 @@ export default function DocumentEditor({ month }) {
       });
       
       // Calcular y agregar resumen por días
-      const diasData = calcularResumenPorDias(tableData).map(dia => [
+      // Encontrar índices necesarios
+      const fechaIdx = headers.findIndex(h => h.type === 'select-fecha' || h.label === 'Fecha');
+      const montoIdx = headers.findIndex(h => h.type === 'monto' && !h.label?.toLowerCase().includes('ganancia'));
+      const gananciasIdx = headers.findIndex(h => h.label?.toLowerCase().includes('ganancia'));
+      
+      const diasData = calcularResumenPorDias(tableData, fechaIdx, montoIdx, gananciasIdx).map(dia => [
         dia.dia,
         dia.clientes.toString(),
         `S/ ${formatNumberPeruano(dia.monto)}`,
@@ -1084,11 +1103,15 @@ export default function DocumentEditor({ month }) {
   };
 
   // Calcular resumen por días
-  const calcularResumenPorDias = (rows) => {
+  const calcularResumenPorDias = (rows, fechaIndex, montoIndex, gananciasIndex) => {
     const resumenPorDia = {};
     
+    if (fechaIndex === -1 || montoIndex === -1 || gananciasIndex === -1) {
+      return [];
+    }
+    
     rows.forEach(row => {
-      const fecha = row[0]; // Columna 0 es la fecha
+      const fecha = row[fechaIndex]; // Usar índice dinámico
       if (!fecha) return;
       
       // Extraer solo el día de la fecha (formato: 2026-01-15)
@@ -1105,12 +1128,11 @@ export default function DocumentEditor({ month }) {
       
       resumenPorDia[dia].clientes += 1;
       
-      // Columna 6 es Monto
-      const monto = parseMonto(row[6]);
+      // Usar índices dinámicos para Monto y Ganancias
+      const monto = parseMonto(row[montoIndex]);
       resumenPorDia[dia].monto += monto;
       
-      // Columna 10 es Ganancias
-      const ganancia = parseMonto(row[10]);
+      const ganancia = parseMonto(row[gananciasIndex]);
       resumenPorDia[dia].ganancias += ganancia;
     });
     
@@ -1139,7 +1161,12 @@ export default function DocumentEditor({ month }) {
       }).filter(row => row.some(cell => cell !== ''));
 
       // Calcular resumen por días
-      const resumenPorDias = calcularResumenPorDias(previewRows);
+      // Encontrar índices necesarios
+      const fechaIdxPreview = headers.findIndex(h => h.type === 'select-fecha' || h.label === 'Fecha');
+      const montoIdxPreview = headers.findIndex(h => h.type === 'monto' && !h.label?.toLowerCase().includes('ganancia'));
+      const gananciasIdxPreview = headers.findIndex(h => h.label?.toLowerCase().includes('ganancia'));
+      
+      const resumenPorDias = calcularResumenPorDias(previewRows, fechaIdxPreview, montoIdxPreview, gananciasIdxPreview);
 
       setPreviewData({
         headers: headers,
